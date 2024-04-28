@@ -1,0 +1,51 @@
+-- Verify snowflake vs AWS counts. AWS count might be little more than snowflake due to duplicates - as we are not using FIFO - exactly once delivery SQS queue.
+It is not possible to use FIFO queue for S3 evenet notification.
+But with proper lambda timeout, SQS trigger batch window, SQS queue visibility timeout settings, we should ensure the difference is not too much.
+
+-- Snowflake
+
+select count(*) from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data;
+
+select count(*) from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_extracted; -- this will be truncated in the new approach to overcome booknarking issue.
+
+-- AWS
+
+SELECT count(*) FROM "ecommerce-database"."sales_data"; -- this should match ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data;
+
+==========================================================================================================================================
+
+-- It might be ok to have more data (due to duplicates) in AWS but we cannot miss any data. That you can ensure by running this query or distinct product_id etc
+
+-- Snowflake
+
+select count(distinct transaction_date) from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_extracted;
+
+-- AWS
+
+SELECT count(distinct transaction_date) FROM "ecommerce-database"."sales_data";
+
+
+============================
+
+Ensure you suspend the Snowflake tasks, remove lamda trigger, delete kafka topic etc to avoid unnecessary billing:
+
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_task suspend;
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_s3_task suspend;
+
+
+=========================================
+
+
+Note: when resuming, start child task first and then parent task
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_s3_task resume;
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_task resume;
+
+when suspending, suspend parent task first and then child task
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_task suspend;
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_s3_task suspend;

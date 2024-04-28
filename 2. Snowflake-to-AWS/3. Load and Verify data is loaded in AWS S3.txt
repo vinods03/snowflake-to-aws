@@ -1,0 +1,81 @@
+create or replace task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_s3_task
+warehouse = compute_wh
+AFTER ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_task
+as
+copy into s3://vinod-bucket-for-snowflake/project_2/parquet_unloaded_data_partitioned/sales_data/
+from
+(
+ select product_id, name, gender, city, email, amount_spent, transaction_date
+ from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.SALES_DATA_EXTRACTED
+)
+partition by transaction_date
+storage_integration = aws_sf_data
+file_format = parquet_unload_format
+header = true
+single = false;
+
+show tasks
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_s3_task resume;
+
+-- suspend after verification
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_s3_task suspend;
+
+Note:
+
+The issue with this approach is that this task simply copies everything from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.SALES_DATA_EXTRACTED into AWS s3, including the data that has already been copied. There is no automatic bookmarking here that keeps track of data already moved into S3.
+
+
+======================================  TO OVERCOME BOOKMARKING ISSUE =========================
+
+
+To ensure we dont copy all processed data multiple times into AWS s3, after each load, we truncated the ECOMMERCE_DB.KAFKA_LIVE_STREAMING.SALES_DATA_EXTRACTED table.
+As a task cannot have multiple SQL statements, we create a stored proc with the multiple steps and then invoke the stored proc in the task.
+
+CREATE OR REPLACE PROCEDURE load_aws_s3 ()
+RETURNS NUMBER
+LANGUAGE SQL
+AS
+
+BEGIN
+ 
+  copy into s3://vinod-bucket-for-snowflake/project_2/parquet_unloaded_data_partitioned/sales_data/
+  from
+(
+ select product_id, name, gender, city, email, amount_spent, transaction_date
+ from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.SALES_DATA_EXTRACTED
+)
+partition by transaction_date
+storage_integration = aws_sf_data
+file_format = parquet_unload_format
+header = true
+single = false;
+
+truncate table ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_extracted;
+
+RETURN 1;
+
+END;
+
+
+create or replace task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_s3_task
+warehouse = compute_wh
+AFTER ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_task
+as
+call load_aws_s3 ();
+
+
+=== A better option than trucating the extracted table is to use the run_id approach where, in every run, we process data greater than prior run_id's. run_id being a unique sequence number generated for every run.
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,66 @@
+-- truncate might be needed during the initial setup, before the first end-to-end consumption. 
+-- truncate table ecommerce_db.kafka_live_streaming.sales_data
+-- table is needed so that the stream can be created but the test data needs to be purged. so instead of drop, do a truncate.
+
+CREATE OR REPLACE STREAM ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_stream ON TABLE ecommerce_db.kafka_live_streaming.sales_data;
+
+create or replace TABLE ECOMMERCE_DB.KAFKA_LIVE_STREAMING.SALES_DATA_EXTRACTED (
+	product_id VARCHAR(50),
+	name VARCHAR(50),
+	gender VARCHAR(10),
+	city VARCHAR(50),
+	email VARCHAR(100),
+	amount_spent NUMBER(12,2),
+	transaction_date VARCHAR(20)
+);
+
+
+CREATE OR REPLACE TASK ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_task
+warehouse = compute_wh
+schedule = '2 minute'
+when system$stream_has_data('sales_data_stream')
+as
+merge into ecommerce_db.kafka_live_streaming.sales_data_extracted as sde
+using (
+select 
+to_object(record_content):product_id as product_id,
+to_object(record_content):name as name,
+to_object(record_content):gender as gender,
+to_object(record_content):city as city,
+to_object(record_content):email as email,
+to_object(record_content):amount_spent::NUMBER(12,2) as amount_spent,
+to_object(record_content):transaction_date as transaction_date
+from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_stream
+where metadata$action = 'INSERT'
+) as sds
+on sds.product_id = sde.product_id
+when matched then update
+set sde.name = sds.name, 
+sde.gender = sds.gender, 
+sde.city = sds.city, 
+sde.email = sds.email,
+sde.amount_spent = sds.amount_spent,
+sde.transaction_date = sds.transaction_date
+when not matched then insert
+(product_id, name, gender, city, email, amount_spent, transaction_date)
+values
+(sds.product_id, sds.name, sds.gender, sds.city, sds.email, sds.amount_spent, sds.transaction_date)
+
+Note: We actually do not need an upsert logic as shown above, as ecommerce_db.kafka_live_streaming.sales_data_extracted is getting truncated after every AWS S3 load (to overcome bookmarking issue)
+
+
+show tasks;
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_task resume;
+
+-- Verify data is loaded correctly in the extracted table in Snowflake
+
+select * from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.SALES_DATA_EXTRACTED;
+
+select count(*) from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.SALES_DATA;
+
+select count(*) from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.SALES_DATA_EXTRACTED;
+
+-- suspend the task after verification
+
+alter task ECOMMERCE_DB.KAFKA_LIVE_STREAMING.sales_data_task suspend;

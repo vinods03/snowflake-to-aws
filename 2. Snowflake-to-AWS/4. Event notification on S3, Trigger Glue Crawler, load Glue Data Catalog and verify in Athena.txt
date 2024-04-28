@@ -1,0 +1,42 @@
+1. In AWS Console, Create a SQS queue - sales-data-queue
+
+2. Modified the Access policy of the queue to below, so that we will be able to send event notification to this queue from the S3 bucket, where Snowflake data lands
+
+{
+  "Version": "2012-10-17",
+  "Id": "123",
+  "Statement": [
+    {
+      "Sid": "456",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "s3.amazonaws.com"
+      },
+      "Action": "SQS:SendMessage",
+      "Resource": "arn:aws:sqs:us-east-1:<12-digit-aws-account-number>:sales-data-queue",
+      "Condition": {
+        "StringEquals": {
+          "aws:SourceAccount": "<12-digit-aws-account-number>"
+        },
+        "ArnLike": {
+          "aws:SourceArn": "arn:aws:s3:::vinod-bucket-for-snowflake"
+        }
+      }
+    }
+  ]
+}
+
+3. Create an event notification on the S3 bucket vinod-bucket-for-snowflake where Snowflake data lands, with the destination as above SQS queue
+
+4. Create a Glue Crawler - sales-data-crawler - with source as s3://vinod-bucket-for-snowflake/project_2/parquet_unloaded_data_partitioned/sales_data/ 
+   The target glue data catalog table name will be the last folder name in the above path i.e. sales_data (as we have not provided any prefix to be added).
+
+5. Created a Lambda function - sales-data-glue-trigger-fn - with above SQS queue as the trigger and batch window of 180 seconds. default batch size of 10 is set automatically.
+   Set the lambda function Timeout to 5 minutes.
+   Make sure the Lambda function has required S3 access, SQS access, Glue access and also the basic cloudwatch log access.
+   Note that, without the SQS access being granted first, the trigger cannot be added.
+   Also note that the lambda function checks if glue crawler sales-data-crawler is in Ready state and if so, starts the crawler.
+
+6. General guidelines for SQS queue visbility timeout is "To allow your function time to process each batch of records, set the source queue's visibility timeout to at least six times the      timeout that you configure on your function." Since the lambda function takes 3 + 5 = 8 minutes, the queue visbility timeout must be atleast 6 * 8 = 48 minutes. I set it to 1 hour.
+
+

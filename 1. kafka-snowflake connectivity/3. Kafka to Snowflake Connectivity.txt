@@ -1,0 +1,71 @@
+Copy SF_connect.properties and connect-standalone.properties from https://github.com/siddd88/snowflake-aws-udemy/tree/main/Section%2011%20-kafka-streaming-snowflake/kafka-required-files to C:\Vinod\kafka\config.
+
+In connect-standalone.properties, update plugin.path to the path of snowflake-kafka-connector.jar i.e. C:\Vinod\kafka\libs\
+
+Note: 
+
+With the upgraded jar snowflake-kafka-connector-2.0.0.jar, i had to use 2 additional properties in SF_connect.properties:
+value.converter.basic.auth.credentials.source=USER_INFO
+value.converter.basic.auth.user.info=snowflake-account-user-name:snowflake-account-password.
+
+Also, note that in the property:
+snowflake.topic2table.map=sales-data:sales_data
+the first sales-data refers to kafka topic and the second sales-data refers to snowflake table.
+You can give multiple values like this:
+snowflake.topic2table.map=topic1:table1,topic2:table2
+
+The property "name=kafka_live_streaming_data" is like a temporary stage for moving data between kafka and snowflake and taken care of internally.
+Might not be needed with upgraded jar.
+
+======
+
+To establish connectivity between the server where kafka is running (my laptop in this case) and snowflake, we are doing the below steps.
+
+cd C:\Vinod\kafka
+
+# Create an unencrypted private key 
+openssl genrsa -out rsa_key.pem 2048
+
+# Create a public key referencing the above private key
+openssl rsa -in rsa_key.pem -pubout -out rsa_key.pub
+
+Open private key rsa_key.pem, copy the content and update in snowflake.private.key of SF_connect.properties. Add a "\" at the end of every line except the last line.
+
+Open public key rsa_key.pub, copy the content and in snowflake, run the below command
+
+alter user sresht set rsa_public_key = '<the value copied above>'
+
+desc user sresht -- verify public key is there.
+
+=======
+
+In snowflake make sure the schema specified in SF_connect.properties is present:
+
+use database ecommerce_db;
+
+create schema ecommerce_db.kafka_live_streaming;
+
+=========
+
+Now if data is being published into the topic sales-data as specified in 2. JARs and initial Kafka setup.txt, proceed to execute below
+
+This is the Kafka Connector to Snowflake
+
+-- Open another CMD
+
+cd C:\Vinod\kafka\bin\windows
+
+connect-standalone.bat C:\Vinod\kafka\config\connect-standalone.properties C:\Vinod\kafka\config\SF_connect.properties
+
+If successful, table will be created in specified db/schema in Snowflake 
+
+====================
+
+Summarizing, we use a snowflake-kafka-connector.jar on the server where kafka is running (my laptop)
+
+We establish connectivity  between the server where kafka is running (my laptop) and snowflake, by using private key / public key and few other configs in SF_connect.properties / above jar.
+
+In the kafka connector properties, we pass the private key of the server where kafka is running. 
+This is validated against public key set for the snowflake user and connectivity is established between the server where kafka is running and snowflake.
+
+

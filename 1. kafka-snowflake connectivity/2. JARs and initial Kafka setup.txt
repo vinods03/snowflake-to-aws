@@ -1,0 +1,70 @@
+From https://kafka.apache.org/downloads, downloaded kafka_2.12-3.1.0.tgz. Extract it.
+
+From https://mvnrepository.com/artifact/com.snowflake/snowflake-kafka-connector, downloaded snowflake-kafka-connector-2.0.0
+
+Note: Initially i used snowflake-kafka-connector-1.5.0.jar, but when i used the below command (covered in the next topic) to move the data from Kafka to snowflake:
+connect-standalone.bat C:\Vinod\kafka\config\connect-standalone.properties C:\Vinod\kafka\config\SF_connect.properties
+I got the error "snowflake.url.name is not valid". snowflake.url.name is a property in SF_connect.properties.
+
+Copy kafka_2.12-3.1.0.tgz to C:\Vinod
+
+Rename the extracted folder "kafka_2.12-3.1.0" to "kafka"
+
+Copy snowflake-kafka-connector-2.0.0.jar to C:\Vinod\kafka\libs
+
+Note:
+
+Initially i tried to copy the extracted folder kafka_2.12-3.1.0 & snowflake-kafka-connector-1.5.0.jar to C:\Users\Vinod\Documents\kafka-snowflake and also did not rename the folder.
+I did not want to use this folder i.e. "C:\Vinod\AWSDataEngineering\14. Snowflake AWS ETL pipelines\My Notes\5. Kafka-Snowflake Connector" anyway because of all the spaces.
+But, without copying the kafka_2.12-3.1.0 folder to C:\Vinod and renaming it to Kafka, i was getting the error "input line is too long" when i tried to execute zookeeper-server-start.bat command shown below.
+
+
+============ Next step is to start zookeeper server, kafka server and create a topic
+
+You might have to delete logs from C:\tmp
+
+-- Open CMD
+
+cd C:\Vinod\kafka\bin\windows
+
+zookeeper-server-start.bat C:\Vinod\kafka\config\zookeeper.properties
+
+-- Open another CMD
+
+cd C:\Vinod\kafka\bin\windows
+
+kafka-server-start.bat C:\Vinod\kafka\config\server.properties
+
+-- Open another CMD
+
+cd C:\Vinod\kafka\bin\windows
+
+kafka-topics.bat --create --topic sales-data --bootstrap-server localhost:9092
+
+-- if a topic needs to be deleted use below command.
+
+kafka-topics.bat --delete --topic sales-data --bootstrap-server localhost:9092
+
+-- Copy fake_data.py from https://github.com/siddd88/snowflake-aws-udemy/tree/main/Section%2011%20-kafka-streaming-snowflake to C:\Vinod\kafka
+-- This will publish data into the above topic.
+
+python3 -m pip install faker
+
+python3 -m pip install pandas
+
+python3 -m pip install kafka
+
+python3 -m pip install git+https://github.com/dpkp/kafka-python.git
+
+cd C:\Vinod\kafka
+
+python3 fake_data.py
+
+-- Open another CMD, this is only for verification. Can skip if you are able to see messages getting published into topic as part of above command.
+-- We actually need to use connect-standalone.bat to move the data published in the topic, to snowwflake. This is covered in the next topic.
+
+cd C:\Vinod\kafka\bin\windows
+
+kafka-console-consumer.bat --topic sales-data --from-beginning --bootstrap-server localhost:9092
+
+Kill this after verification.

@@ -1,0 +1,38 @@
+-- Start Kafka
+
+-- Open CMD
+
+cd C:\Vinod\kafka\bin\windows
+
+zookeeper-server-start.bat C:\Vinod\kafka\config\zookeeper.properties
+
+-- Open another CMD
+
+cd C:\Vinod\kafka\bin\windows
+
+kafka-server-start.bat C:\Vinod\kafka\config\server.properties
+
+-- Open another CMD
+
+cd C:\Vinod\kafka\bin\windows
+
+kafka-topics.bat --create --topic sales-data --bootstrap-server localhost:9092
+
+-- if a topic needs to be deleted use below command.
+
+kafka-topics.bat --delete --topic sales-data --bootstrap-server localhost:9092
+
+cd C:\Vinod\kafka
+
+python3 fake_data.py
+
+-- Open another CMD
+
+cd C:\Vinod\kafka\bin\windows
+
+connect-standalone.bat C:\Vinod\kafka\config\connect-standalone.properties C:\Vinod\kafka\config\SF_connect.properties
+
+-- Verify data is loaded correctly in the staging table in Snowflake
+-- Note that the table will be created if not present already
+
+select * from ECOMMERCE_DB.KAFKA_LIVE_STREAMING.SALES_DATA
